@@ -2,10 +2,35 @@
 //
 
 #include <iostream>
+#include <thread>
+
+class scoped_thread
+{
+public:
+    explicit scoped_thread(std::thread t_) : t(std::move(t_))
+    {
+        if (!t.joinable())
+            throw std::logic_error("No thread");
+    }
+
+    ~scoped_thread()
+    {
+        t.join();
+    }
+
+    scoped_thread(scoped_thread&) = delete;
+    scoped_thread& operator=(scoped_thread const&) = delete;
+
+private:
+    std::thread t;
+};
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    scoped_thread t(std::thread([] {std::cout << std::this_thread::get_id() << std::endl; }));
+
+    std::thread t1;
+    scoped_thread st(std::move(t1));
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
