@@ -3,34 +3,37 @@
 
 #include <iostream>
 #include <thread>
+#include <chrono>
+using namespace std::chrono_literals;
 
-class scoped_thread
+class sleeper
 {
 public:
-    explicit scoped_thread(std::thread t_) : t(std::move(t_))
+    sleeper(int& i_) : i{ i_ } {}
+    void operator() (int k)
     {
-        if (!t.joinable())
-            throw std::logic_error("No thread");
+        for (size_t j = 0; j < 5; j++)
+        {
+            std::this_thread::sleep_for(100ms);
+            i += k;
+        }
+        std::cout << std::this_thread::get_id() << std::endl;
     }
-
-    ~scoped_thread()
-    {
-        t.join();
-    }
-
-    scoped_thread(scoped_thread&) = delete;
-    scoped_thread& operator=(scoped_thread const&) = delete;
 
 private:
-    std::thread t;
+    int& i;
 };
 
 int main()
 {
-    scoped_thread t(std::thread([] {std::cout << std::this_thread::get_id() << std::endl; }));
+    std::cout << std::endl;
 
-    std::thread t1;
-    scoped_thread st(std::move(t1));
+    int valSleeper = 1000;
+    std::thread t(sleeper(valSleeper), 5);
+    t.join();
+    std::cout << "valSleeper = " << valSleeper << std::endl;
+
+    std::cout << std::endl;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
