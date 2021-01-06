@@ -1,53 +1,71 @@
-// conditionVariableFixed.cpp
+// sharedFuture.cpp
 
-#include <iostream>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
+#include <exception>
 #include <future>
+#include <iostream>
+#include <thread>
+#include <utility>
+#include <mutex>
 
-std::mutex mutex_;
-std::condition_variable condVar;
+std::mutex contMutex;
 
-bool dataReady;
+struct Div
+{
+	void operator()(std::promise<int>&& intPromise, int a, int b)
+	{
+		try
+		{
+			if (b == 0)
+				throw std::runtime_error("illegal division by zero");
+			intPromise.set_value(a / b);
+		}
+		catch (const std::exception&)
+		{
+			intPromise.set_exception(std::current_exception());
+		}
+	}
+};
 
-void doTheWork() {
-    std::cout << "Processing shared data." << std::endl;
-}
+struct Requestor
+{
+	void operator()(std::shared_future<int> shaFut)
+	{
+		std::lock_guard<std::mutex> lc(contMutex);
+		std::cout << "threadID(" << std::this_thread::get_id() << "): ";
+		try
+		{
+			std::cout << "20/10= " << shaFut.get() << std::endl;
+		}
+		catch (const std::runtime_error& e)
+		{
+			std::cout << e.what() << std::endl;
+		}
+	}
+};
 
-void waitingForWork() {
-    std::cout << "Worker: Waiting for work." << std::endl;
+int main()
+{
+	std::cout << std::endl;
 
-    std::unique_lock<std::mutex> lck(mutex_);
-    condVar.wait(lck, [] {return dataReady; });
-    doTheWork();
-    std::cout << "Work done." << std::endl;
-}
+	std::promise<int> divPromise;
+	std::shared_future<int> divResult = divPromise.get_future();
 
-void setDataReady() {
-    std::lock_guard<std::mutex> lck(mutex_);
-    dataReady = true;
-    std::cout << "Sender: Data is ready." << std::endl;
-    condVar.notify_one();
-}
+	Div div;
+	std::thread divThread(div, std::move(divPromise), 20, 0);
 
-int main() {
+	Requestor req;
+	std::thread sharedThread1(req, divResult);
+	std::thread sharedThread2(req, divResult);
+	std::thread sharedThread3(req, divResult);
+	std::thread sharedThread4(req, divResult);
+	std::thread sharedThread5(req, divResult);
 
-    std::cout << std::endl;
+	divThread.join();
+	sharedThread1.join();
+	sharedThread2.join();
+	sharedThread3.join();
+	sharedThread4.join();
+	sharedThread5.join();
 
-    std::thread t1(waitingForWork);
-    std::thread t2(setDataReady);
-
-    t1.join();
-    t2.join();
-
-    std::cout << std::endl;
-
-    int res = 0;
-    std::thread t([&] {res = 3 + 4; });
-    t.join();
-    std::cout << res << std::endl;
-
-    auto fut = std::async([] {return 3 + 4; });
-    std::cout << fut.get() << std::endl;
+	std::cout << std::endl;
 }
