@@ -1,71 +1,70 @@
-// sharedFuture.cpp
-
-#include <exception>
-#include <future>
 #include <iostream>
-#include <thread>
 #include <utility>
-#include <mutex>
+#include <thread>
+#include <chrono>
+#include <future>
 
-std::mutex contMutex;
-
-struct Div
+void f1(int n)
 {
-	void operator()(std::promise<int>&& intPromise, int a, int b)
-	{
-		try
-		{
-			if (b == 0)
-				throw std::runtime_error("illegal division by zero");
-			intPromise.set_value(a / b);
-		}
-		catch (const std::exception&)
-		{
-			intPromise.set_exception(std::current_exception());
-		}
-	}
+    for (int i = 0; i < 5; ++i) {
+        std::cout << "Thread 1 executing\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+void f2(int& n)
+{
+    for (int i = 0; i < 5; ++i) {
+        std::cout << "Thread 2 executing\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+class foo
+{
+public:
+    void bar()
+    {
+        for (int i = 0; i < 5; ++i) {
+            std::cout << "Thread 3 executing\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
 };
 
-struct Requestor
+class baz
 {
-	void operator()(std::shared_future<int> shaFut)
-	{
-		std::lock_guard<std::mutex> lc(contMutex);
-		std::cout << "threadID(" << std::this_thread::get_id() << "): ";
-		try
-		{
-			std::cout << "20/10= " << shaFut.get() << std::endl;
-		}
-		catch (const std::runtime_error& e)
-		{
-			std::cout << e.what() << std::endl;
-		}
-	}
+public:
+    void operator()()
+    {
+        for (int i = 0; i < 5; ++i) {
+            std::cout << "Thread 4 executing\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
 };
 
 int main()
 {
-	std::cout << std::endl;
+    std::cout << std::endl;
 
-	std::promise<int> divPromise;
-	std::shared_future<int> divResult = divPromise.get_future();
+    auto first = std::async(std::launch::async, [] {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::cout << "first thread" << std::endl;
+    });
 
-	Div div;
-	std::thread divThread(div, std::move(divPromise), 20, 0);
+    auto second = std::async(std::launch::async, [] {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout << "second thread" << std::endl; }
+    );
 
-	Requestor req;
-	std::thread sharedThread1(req, divResult);
-	std::thread sharedThread2(req, divResult);
-	std::thread sharedThread3(req, divResult);
-	std::thread sharedThread4(req, divResult);
-	std::thread sharedThread5(req, divResult);
-
-	divThread.join();
-	sharedThread1.join();
-	sharedThread2.join();
-	sharedThread3.join();
-	sharedThread4.join();
-	sharedThread5.join();
-
-	std::cout << std::endl;
+    first.get();
+    second.get();
+    std::cout << "main thread" << std::endl;
 }
