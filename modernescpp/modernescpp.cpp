@@ -4,7 +4,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
-
+#include <assert.h>
 
 //std::vector<int> mySharedWork;
 //std::mutex mutex_;
@@ -54,19 +54,29 @@ void setDataReady()
 	std::cout << "Data prepared" << std::endl;
 }
 
+template <typename T>
+requires std::is_integral<T>::value
+T fetch_mult(std::atomic<T>& shared, T mult)
+{
+	T oldValue = shared.load();
+	while (!shared.compare_exchange_strong(oldValue, oldValue * mult));
+	return oldValue;
+}
+
+class MyData
+{
+	int m;
+};
+
 int main()
 {
-	std::cout << std::endl;
-	std::thread t1(waitingForWork);
-	std::thread t2(setDataReady);
+	std::atomic<int> myInt{ 5 };
+	std::cout << myInt << std::endl;
+	std::cout << fetch_mult(myInt, 5) << std::endl;
+	std::cout << myInt << std::endl;
 
-	t1.join();
-	t2.join();
-
-	for (size_t i = 0; i < mySharedWork.size(); i++)
-	{
-		std::cout << mySharedWork[i] << " ";
-	}
-
-	std::cout << "\n\n";
+	std::shared_ptr<MyData> p;
+	std::shared_ptr<MyData> p2 = std::atomic_load(&p);
+	std::shared_ptr<MyData> p3(new MyData);
+	std::atomic_store(&p, p3);
 }
