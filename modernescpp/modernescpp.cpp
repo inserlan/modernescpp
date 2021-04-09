@@ -1,48 +1,39 @@
-#include <atomic>
-#include <iostream>
+#include <string>
 #include <thread>
-#include <vector>
-
-std::vector<int> mySharedWork;
-std::atomic<bool> dataProduced(false);
-std::atomic<bool> dataConsumed(false);
-
-void dataProducer() 
+#include <atomic>
+#include <assert.h>
+struct X
 {
-    mySharedWork = { 1,0,3 };
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    dataProduced.store(true, std::memory_order_release);
+    int i;
+    std::string s;
+};
+std::atomic<X*> p;
+std::atomic<int> a;
+void create_x()
+{
+    X* x = new X;
+    x->i = 42;
+    x->s = "hello";
+    a.store(99, std::memory_order_relaxed);
+    p.store(x, std::memory_order_release);
 }
-
-void deliveryBoy() 
+void use_x()
 {
-    while (!dataProduced.load(std::memory_order_acquire));
-    dataConsumed.store(true, std::memory_order_release);
+    X* x;
+    while (!(x = p.load(std::memory_order_consume)))
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+    assert(x->i == 42);
+    assert(x->s == "hello");
+    assert(a.load(std::memory_order_relaxed) == 99);
 }
-
-void dataConsumer() 
+int main()
 {
-    while (!dataConsumed.load(std::memory_order_acquire));
-    mySharedWork[1] = 2;
-}
-
-int main() 
-{
-
-    std::cout << std::endl;
-
-    std::thread t1(dataConsumer);
-    std::thread t2(deliveryBoy);
-    std::thread t3(dataProducer);
-
-    t1.join();
-    t2.join();
-    t3.join();
-
-    for (auto v : mySharedWork) {
-        std::cout << v << " ";
+    for (size_t i = 0; i < 1000; i++)
+    {
+        std::thread t1(create_x);
+        std::thread t2(use_x);
+        t1.join();
+        t2.join();
     }
-
-    std::cout << "\n\n";
 
 }
